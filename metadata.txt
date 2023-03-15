@@ -1,0 +1,18 @@
+[general]
+name=DescTools
+qgisMinimumVersion=3.0
+description=Describe geodatas with pyrealb.
+version=0.1
+author=Jérémy Kalsron
+email=jeremy.kalsron@gmail.com
+
+about=Plugin qui ajoute des traitements Processing pour décrire des données avec pyrealb.
+
+tags=python, processing
+
+category=Plugins
+icon=icon.png
+
+experimental=True
+deprecated=False
+hasProcessingProvider=yes
