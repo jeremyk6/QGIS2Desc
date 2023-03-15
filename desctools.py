@@ -1,10 +1,24 @@
 from qgis.core import QgsApplication, QgsProcessingProvider, QgsProcessingModelAlgorithm
 from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.PyQt.QtCore import QTranslator, QSettings, QCoreApplication, QLocale, qVersion
+import os
+import pip
+from importlib import find_loader
+from . import resources
+
+# Check if all packages are installed
+if find_loader("pyrealb") is None:
+    msgbox = QMessageBox
+    question = msgbox.question(None,"","Le paquet pyrealb n'est pas installé. Voulez-vous que l'extension l'installe pour vous ?", msgbox.Yes | msgbox.No)
+    if question == msgbox.Yes:
+        if pip.main(['install', 'pyrealb']) == 0:
+            msgbox.information(None, "", "Le paquet a été installé.")
+        else:
+            msgbox.critical(None, "", "Le paquet n'a pas pu être installé. Veuillez procéder à une installation manuelle.")
+
 from .algorithms.creator import *
 from .algorithms.assembler import *
-import os
-from . import resources
 
 class Provider(QgsProcessingProvider):
 
