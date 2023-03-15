@@ -1,13 +1,7 @@
-from qgis.core import QgsProcessing
-from qgis.core import QgsProcessingAlgorithm
-from qgis.core import QgsProcessingMultiStepFeedback
-from qgis.core import QgsProcessingParameterVectorLayer
-from qgis.core import QgsProcessingParameterField
-from qgis.core import QgsProcessingParameterString
-from qgis.core import QgsProcessingParameterMultipleLayers
-from qgis.core import QgsProcessingParameterFileDestination
-from qgis.core import QgsProcessingParameterFeatureSink
-from qgis.core import QgsFeatureRequest
+from qgis.core import QgsProcessing, QgsProcessingAlgorithm, QgsProcessingMultiStepFeedback,\
+    QgsProcessingParameterVectorLayer, QgsProcessingParameterField, QgsProcessingParameterString,\
+    QgsProcessingParameterMultipleLayers, QgsProcessingParameterFileDestination, QgsProcessingParameterFeatureSink,\
+    QgsFeatureRequest, QgsProcessingParameterMatrix
 import processing
 
 from pyrealb import *
@@ -22,7 +16,8 @@ class Assembler(QgsProcessingAlgorithm):
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterMultipleLayers('layers', 'Couches décrites', layerType=QgsProcessing.TypeMapLayer, defaultValue=None))
         self.addParameter(QgsProcessingParameterString('document_title', 'Titre du document', multiLine=False, defaultValue=''))
-        self.addParameter(QgsProcessingParameterString('description_type', 'Type de description', multiLine=False, defaultValue=''))
+        self.addParameter(QgsProcessingParameterMatrix('metadata_filter', 'Sélection par métadonnées', numberRows=1, hasFixedNumberRows=False, headers=['Paramètre','Valeur'], defaultValue=['type','0']))
+        self.addParameter(QgsProcessingParameterMatrix('assembly', 'Assemblage du document', numberRows=1, hasFixedNumberRows=False, headers=['Nom','Titre','Style']))
         self.addParameter(QgsProcessingParameterFileDestination('description', 'Description', optional=False, fileFilter='Tous les fichiers (*.*)', createByDefault=False, defaultValue=None))
 
     def processAlgorithm(self, parameters, context, model_feedback):
@@ -32,85 +27,89 @@ class Assembler(QgsProcessingAlgorithm):
         results = {}
         outputs = {}
 
-        description_type = parameters['description_type']
-
-        root = DocumentRoot(parameters['document_title'])
-        documentSlots = [None for i in range(10)]
+        metadata_filter = {}
+        for i in range(0, len(parameters['metadata_filter']), 2):
+            metadata_filter[parameters['metadata_filter'][i]] = parameters['metadata_filter'][i+1]
+        
+        assembly = []
+        for i in range(0, len(parameters['assembly']), 3):
+            assembly.append({"name": parameters['assembly'][i], "title": parameters['assembly'][i+1], "style": parameters['assembly'][i+2]})
 
         layers = self.parameterAsLayerList(parameters, 'layers', context)
-        
-        for layer in layers:
 
-            container = Paragraph()
-            style = "text"
+        root = DocumentRoot(parameters['document_title'])
+        documentSlots = []
 
+        for element in assembly:
+            layer = None
             metadata = None
-            descriptions = []
-            for feature in layer.getFeatures():
-                descriptions.append(json.loads(feature['description']))
-                metadata = json.loads(feature['metadata'])
+            for layer in layers:
 
-            # Check if the description type corresponds to what we want, else we don't describe the layer
-            if "type" in metadata.keys():
-                if metadata["type"] != description_type:
-                    continue
-            else:
-                continue
-            
-            # Add the title of the layer if any
-            if "title" in metadata.keys():
-                container.add_child(
-                    Title2().add_child(
-                        Text(metadata["title"])
-                    )
-                )
-
-            # Check the style of the layer
-            if "style" in metadata.keys():
-                style =  metadata['style']
-
-            Elements = List()
-
-            for description in descriptions:
-
-                paragraph = Paragraph()
-
-                # If the description is a list, it contains mulitple sentences to merge
-                if isinstance(description, list):
-                    paragraph = Paragraph()
-                    for sentence in description:
-                        sentence = fromJSON(sentence)
-                        paragraph.add_child(
-                            Text(sentence)
-                        )
-                else:
-                    description = fromJSON(description)
-                    paragraph.add_child(
-                            Text(description.realize())
-                    )
+                # Get layer metadatas
+                for feature in layer.getFeatures():
+                    metadata = json.loads(feature['metadata'])
+                    break
                 
-                if style == "list":
-                    Elements.add_child(
-                        ListElement().add_child(
-                            paragraph
+                # Compare metadatas
+                if element["name"] == metadata["name"]:
+                    pass_filter = True
+                    for key in metadata_filter.keys():
+                        if (key in metadata and metadata[key] == metadata_filter[key]) == false:
+                            pass_filter = false
+                            break
+                    if pass_filter: break
+
+                layer = None
+
+            if(layer):
+                container = Paragraph()
+                descriptions = [json.loads(feature['description']) for feature in layer.getFeatures()]
+                
+                # Add the title of the layer if any
+                if element["title"]:
+                    container.add_child(
+                        Title2().add_child(
+                            Text(element["title"])
                         )
                     )
-                else:
-                    container.add_child(paragraph)
-            
-            if style=="list":
-                container.add_child(Elements)
 
-            # Put the container in the right slot
-            order = 0
-            if "order" in metadata.keys():
-                order = int(metadata["order"])
-            documentSlots[order] = container
+                Elements = List()
+
+                for description in descriptions:
+
+                    paragraph = Paragraph()
+
+                    # If the description is a list, it contains mulitple sentences to merge
+                    if isinstance(description, list):
+                        paragraph = Paragraph()
+                        for sentence in description:
+                            sentence = fromJSON(sentence)
+                            paragraph.add_child(
+                                Text(sentence)
+                            )
+                    else:
+                        description = fromJSON(description)
+                        paragraph.add_child(
+                                Text(description.realize())
+                        )
+                    
+                    if element["style"] == "list":
+                        Elements.add_child(
+                            ListElement().add_child(
+                                paragraph
+                            )
+                        )
+                    else:
+                        container.add_child(paragraph)
+                
+                if element["style"]=="list":
+                    container.add_child(Elements)
+
+                documentSlots.append(container)
 
         # Add each container to the document root
         for container in documentSlots:
-            if container is not None:
-                root.add_child(container)
+            root.add_child(container)
 
         file = open(self.parameterAsFileOutput(parameters, 'description', context), "w")
         file.write(root.toString())
