@@ -32,8 +32,7 @@ class Creator(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterVectorLayer('layer', 'Couche initiale', types=[QgsProcessing.TypeVectorAnyGeometry], defaultValue=None))
-        self.addParameter(QgsProcessingParameterField('fields', 'Champs à traiter', type=QgsProcessingParameterField.Any, parentLayerParameterName='layer', allowMultiple=True, defaultValue=None))
-        param = QgsProcessingParameterString('desc_function', 'Fonction de description', multiLine=True, defaultValue='from pyrealb import *\n\ndef description():\n  return("")')
+        param = QgsProcessingParameterString('desc_function', 'Fonction de description', multiLine=True, defaultValue='from pyrealb import *\n\n# f is a dictionary with layer\'s attributes names as keys.\n# Each attribute can be accessed like this : f["name"]\ndef description(f):\n  return("")')
         param.setMetadata({'widget_wrapper': {'class': CodeEditor}})
         self.addParameter(param)
         self.addParameter(QgsProcessingParameterMatrix('metadata', 'Métadonnées', numberRows=1, hasFixedNumberRows=False, headers=['Paramètre','Valeur'], defaultValue=['type','0','order','0','style','text']))
@@ -52,7 +51,7 @@ class Creator(QgsProcessingAlgorithm):
             'FIELD_NAME': 'description',
             'FIELD_PRECISION': 3,
             'FIELD_TYPE': 2,  # Texte (chaîne de caractères)
-            'FORMULA': 'value = description(%s)'%(','.join(["<%s>"%field for field in parameters['fields']])),
+            'FORMULA': 'value = description({%s})'%(','.join(["'%s' : <%s>"%(field, field) for field in [field.name() for field in self.parameterAsLayer(parameters, "layer", context).fields()]])),
             'GLOBAL': parameters['desc_function'],
             'INPUT': parameters['layer'],
             'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
