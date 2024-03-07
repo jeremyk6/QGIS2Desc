@@ -4,11 +4,11 @@ from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.PyQt.QtCore import QTranslator, QSettings, QCoreApplication, QLocale, qVersion
 import os
 import pip
-from importlib import find_loader
+from importlib.util import find_spec
 from . import resources
 
 # Check if all packages are installed
-if find_loader("pyrealb") is None:
+if find_spec("pyrealb") is None:
     msgbox = QMessageBox
     question = msgbox.question(None,"","Le paquet pyrealb n'est pas installé. Voulez-vous que l'extension l'installe pour vous ?", msgbox.Yes | msgbox.No)
     if question == msgbox.Yes:
